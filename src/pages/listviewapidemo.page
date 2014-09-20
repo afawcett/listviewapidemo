@@ -1,0 +1,140 @@
+<apex:page showHeader="true" sidebar="true" tabStyle="SuperListViewViewer__tab">
+	<apex:includeScript value="{!URLFOR($Resource.dataTable, 'js/jquery.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.dataTable, 'js/jquery.dataTables.min.js')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.dataTable, 'css/jquery.dataTables.css')}"/>
+	<script>
+	$(document).ready(function() {
+
+		// Create dropdown to list List View names
+		var listViewSelect = $('<select />');
+		listViewSelect.appendTo('#selectListView');
+		listViewSelect.change(function() { // On change...
+
+			// Selected Object
+			var objectName = $('#selectObject').find('option:selected').val();
+
+			// Selected List View
+			var listViewId = $(this).find('option:selected').val();
+			if(listViewId==undefined)
+				return;
+
+			// List View describe to take a look at the SOQL!
+			$.ajax({
+				url : '/services/data/v32.0/sobjects/' + objectName + '/listviews/' + listViewId + '/describe', 
+				headers : { 'Authorization' : 'Bearer {!$Api.Session_ID}' },
+				datatype : 'json', 
+				success : function(data, textStatus, jqXHR) {					
+					$('#soql').text(data.query);
+				}
+			});
+
+			// Call the List View API to get the results (also includes column definitions)
+			$.ajax({
+				url : '/services/data/v32.0/sobjects/' + objectName + '/listviews/' + listViewId + '/results', 
+				headers : { 'Authorization' : 'Bearer {!$Api.Session_ID}' },
+				datatype : 'json', 
+				success : function(data, textStatus, jqXHR) {					
+
+					// Clear current List View info
+					$('#listview').empty();
+
+					// Create the table and add columns
+					var table = $('<table></table>');
+					var thead = $('<thead></thead>');
+					var theadtr = $('<tr></tr>');					
+					table.appendTo('#listview');					
+					table.append(thead);
+					thead.append(theadtr);
+					$.each(data.columns, function(index, column) {
+						if(!column.hidden)
+							theadtr.append($('<th>' + column.label + '</th>'));
+					});
+
+					// Add the rows
+					var tbody = $('<tbody></tbody');
+					table.append(tbody);
+					$.each(data.records, function(rowIndex, record) {
+						var tbodytr = $('<tr></tr>');					
+						tbody.append(tbodytr);
+						$.each(record.columns, function(colIndex, column) {
+							if(!data.columns[colIndex].hidden)
+								tbodytr.append($('<td>' + 
+									(record.columns[colIndex].value!=null ? record.columns[colIndex].value : '') + 
+									'</td>'));
+						});
+					});
+
+					// Enhance this boring old HTML table with JQuery DataTable!
+					var dataTable = table.DataTable();
+				}
+			});
+		});
+
+		// Create dropdown to list List View names
+		var objectSelect = $('<select />');
+		objectSelect.appendTo('#selectObject');
+		objectSelect.change(function() { // On change...
+
+			// Clear current List View info
+			$('#selectListView').find('option').remove();
+			$('#listview').empty();			
+			$('#soql').text('');
+
+			// Selected Object
+			var objectName = $(this).find('option:selected').val();
+
+			// Call the List View API to obtain a list of List Views for the selected object
+			$.ajax({
+				url : '/services/data/v32.0/sobjects/' + objectName + '/listviews', 
+				headers : { 'Authorization' : 'Bearer {!$Api.Session_ID}' },
+				datatype : 'json', 
+				success : function(data, textStatus, jqXHR) {
+					$.each(data.listviews, function(index, obj) {
+						listViewSelect
+	         				.append($("<option></option>")
+	         				.attr("value",obj.id)
+	         				.text(obj.label)); 					
+					});
+					listViewSelect.change();
+				}
+			});
+
+		});
+
+		// Call the SObject Describe API to list the objects in the org
+		$.ajax({
+			url : '/services/data/v32.0/sobjects', 
+			headers : { 'Authorization' : 'Bearer {!$Api.Session_ID}' },
+			datatype : 'json', 
+			success : function(data, textStatus, jqXHR) {
+				$.each(data.sobjects, function(index, obj) {
+					if(obj.queryable && obj.searchable)
+						objectSelect
+	         				.append($("<option></option>")
+	         				.attr("value",obj.name)
+	         				.text(obj.label)); 					
+				});
+				objectSelect.change();
+			}
+		});
+	});
+	</script>
+	<apex:sectionHeader title="Super ListView Viewer using ListView API"/>
+	<apex:pageBlock >
+		<apex:pageBlockSection columns="2">
+			<apex:pageBlockSectionItem ><b>Object</b></apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem ><div id="selectObject"/></apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem ><b>List View</b></apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem ><div id="selectListView"/></apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+		<apex:pageBlockSection columns="2">
+			<apex:pageBlockSectionItem ><b>SOQL</b></apex:pageBlockSectionItem>
+			<apex:pageBlockSectionItem ><pre id="soql" style="white-space:pre-wrap"/></apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+	</apex:pageBlock>	
+	<apex:pageBlock >
+		<apex:pageBlockSection columns="1">
+			<apex:pageBlockSectionItem ><div id="listview"/></apex:pageBlockSectionItem>
+		</apex:pageBlockSection>
+	</apex:pageBlock>	
+</apex:page>
